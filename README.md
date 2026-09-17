@@ -51,12 +51,13 @@ python app.py
 ---
 
 ## 📁 디렉터리 구조
-\`\`\`text
+```text
 ├── templates/
 │   └── index2.html       # 대시보드 및 차트 UI
 ├── app.py                # Flask 서버 라우팅 및 API 엔드포인트
 ├── auth.py               # 토스증권 인증 토큰 발급
 ├── holding.py            # 계좌 보유 주식 조회
+├── acount.py             # 계좌 정보 및 예수금 현황 확인 스크립트
+├── check.py              # API 연결 상태 및 토큰 정상 발급 사전 점검
 ├── .gitignore            # Git 제외 설정 (.env, venv 등)
 └── README.md             # 프로젝트 안내 문서
-\`\`\`
