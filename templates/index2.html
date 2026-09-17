@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>토스증권 포트폴리오 & 전체 일봉 대시보드</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --subtext: #94a3b8;
+      --up: #f87171;     /* 상승 (빨강) */
+      --down: #60a5fa;   /* 하락 (파랑) */
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 32px 16px; }
+    .container { max-width: 960px; margin: 0 auto; }
+    
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    .btn-refresh {
+      background-color: #2563eb; color: #fff; border: none; border-radius: 8px;
+      padding: 8px 16px; font-weight: 600; cursor: pointer; transition: 0.2s;
+    }
+    .btn-refresh:hover { background-color: #1d4ed8; }
+
+    /* 요약 카드 */
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card .title { font-size: 0.875rem; color: var(--subtext); margin-bottom: 8px; }
+    .card .value { font-size: 1.5rem; font-weight: 700; }
+
+    /* 테이블 */
+    .table-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; text-align: right; font-size: 0.95rem; }
+    th, td { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    th { background-color: #172033; color: var(--subtext); font-weight: 600; }
+    td:first-child, th:first-child { text-align: left; }
+    tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+
+    .up { color: var(--up); font-weight: 600; }
+    .down { color: var(--down); font-weight: 600; }
+    .empty-msg { text-align: center; padding: 40px; color: var(--subtext); }
+  </style>
+  <!-- 안정적인 Lightweight Charts v4.1.1 CDN -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📊 내 보유 주식 포트폴리오</h1>
+      <button class="btn-refresh" onclick="loadDashboard()">새로고침</button>
+    </header>
+
+    <!-- 요약 섹션 -->
+    <div class="summary-grid">
+      <div class="card">
+        <div class="title">총 평가 금액</div>
+        <div class="value" id="totalAsset">$0.00</div>
+      </div>
+      <div class="card">
+        <div class="title">총 투자 금액</div>
+        <div class="value" id="totalBuy">$0.00</div>
+      </div>
+      <div class="card">
+        <div class="title">총 평가 손익</div>
+        <div class="value" id="totalProfit">$0.00</div>
+      </div>
+      <div class="card">
+        <div class="title">총 수익률</div>
+        <div class="value" id="totalReturn">0.00 %</div>
+      </div>
+    </div>
+
+    <!-- 보유 종목 리스트 테이블 -->
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>종목명/티커</th>
+            <th>보유수량</th>
+            <th>매입단가</th>
+            <th>현재가</th>
+            <th>평가손익</th>
+            <th>수익률</th>
+          </tr>
+        </thead>
+        <tbody id="holdingsTableBody">
+          <tr>
+            <td colspan="6" class="empty-msg">데이터를 불러오는 중입니다...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 📈 전체 일봉 차트 카드 -->
+    <div class="card" style="margin-top: 32px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div class="title" style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 0;">
+          📈 <span id="currentChartTicker">QLD</span> 전체 일봉 차트
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="tickerInput" placeholder="티커 (예: QLD, SOXS, NVDA)" 
+                 style="background: #0f172a; border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: 6px; outline: none; text-transform: uppercase;">
+          <button class="btn-refresh" onclick="changeChartSymbol()">차트 보기</button>
+        </div>
+      </div>
+      
+      <!-- 차트 렌더링 컨테이너 -->
+      <div id="chartContainer" style="height: 480px; width: 100%; border-radius: 8px; overflow: hidden; position: relative;"></div>
+    </div>
+
+  </div>
+
+  <script>
+    let chart = null;
+    let candleSeries = null;
+    let currentSymbol = 'QLD';
+    let lastCandle = null;
+
+    function parseAmount(val) {
+      if (val === null || val === undefined) return 0;
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') return parseFloat(val.replace(/,/g, '')) || 0;
+      if (typeof val === 'object') return Number(val.amount || val.value || val.price || 0);
+      return 0;
+    }
+
+    function formatCurrency(amount, currency) {
+      if (!currency || currency.toUpperCase() === 'USD') {
+        return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      return `${Math.round(amount).toLocaleString()} 원`;
+    }
+
+    function findHoldingsArray(data) {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (typeof data === 'object') {
+        const keys = ['holdings', 'items', 'output', 'result', 'elements', 'positions', 'stocks'];
+        for (const k of keys) if (Array.isArray(data[k])) return data[k];
+        for (const k in data) {
+          if (Array.isArray(data[k])) return data[k];
+          if (typeof data[k] === 'object' && data[k] !== null) {
+            const nested = findHoldingsArray(data[k]);
+            if (nested.length > 0) return nested;
+          }
+        }
+      }
+      return [];
+    }
+
+    // 1. 일봉 전용 차트 컨테이너 초기화
+    function initChart() {
+      const container = document.getElementById('chartContainer');
+      container.innerHTML = '';
+
+      chart = LightweightCharts.createChart(container, {
+        width: container.clientWidth || 928,
+        height: 480,
+        layout: {
+          background: { color: '#1e293b' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: '#334155' },
+          horzLines: { color: '#334155' },
+        },
+        crosshair: {
+          mode: LightweightCharts.CrosshairMode.Normal,
+        },
+        timeScale: {
+          timeVisible: false,      // 일봉이므로 시:분 숨김
+          secondsVisible: false,
+          borderColor: '#334155',
+        },
+      });
+
+      candleSeries = chart.addCandlestickSeries({
+        upColor: '#f87171',
+        downColor: '#60a5fa',
+        borderDownColor: '#60a5fa',
+        borderUpColor: '#f87171',
+        wickDownColor: '#60a5fa',
+        wickUpColor: '#f87171',
+      });
+
+      // 창 크기 조절 시 차트 폭 자동 재조정
+      const resizeObserver = new ResizeObserver(entries => {
+        if (entries.length === 0 || !entries[0].contentRect) return;
+        chart.applyOptions({ width: entries[0].contentRect.width });
+      });
+      resizeObserver.observe(container);
+    }
+
+    // 2. 일봉 데이터 조회 및 렌더링
+    async function loadCandles(symbol) {
+      currentSymbol = symbol.toUpperCase();
+      document.getElementById('currentChartTicker').innerText = currentSymbol;
+      
+      try {
+        const res = await fetch(`/api/candles?symbol=${currentSymbol}`);
+        const result = await res.json();
+        
+        if (result.status !== 'success' || !result.data || result.data.length === 0) {
+          console.warn("일봉 데이터를 불러올 수 없습니다:", result.message);
+          return;
+        }
+
+        // 날짜 오름차순 정렬 및 'YYYY-MM-DD' 포맷 세팅
+        const formatted = result.data.map(item => ({
+          time: item.time, // 'YYYY-MM-DD'
+          open: parseAmount(item.open),
+          high: parseAmount(item.high),
+          low: parseAmount(item.low),
+          close: parseAmount(item.close),
+        })).filter(item => item.open > 0 && item.close > 0)
+          .sort((a, b) => (a.time > b.time ? 1 : -1));
+
+        // 날짜 중복 제거
+        const uniqueFormatted = [];
+        const seenDates = new Set();
+        for (const c of formatted) {
+          if (!seenDates.has(c.time)) {
+            seenDates.add(c.time);
+            uniqueFormatted.push(c);
+          }
+        }
+
+        if (uniqueFormatted.length > 0) {
+          candleSeries.setData(uniqueFormatted);
+          lastCandle = { ...uniqueFormatted[uniqueFormatted.length - 1] };
+          chart.timeScale().fitContent(); // 전체 일봉을 화면에 한눈에 맞춤
+        }
+      } catch (err) {
+        console.error("일봉 로딩 에러:", err);
+      }
+    }
+
+    // 3. 당일 일봉 캔들 실시간 갱신 (토스 현재가 반영)
+    function updateLiveCandle(price) {
+      if (!candleSeries || !lastCandle || !price) return;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      if (lastCandle.time === todayStr) {
+        lastCandle.high = Math.max(lastCandle.high, price);
+        lastCandle.low = Math.min(lastCandle.low, price);
+        lastCandle.close = price;
+      } else {
+        lastCandle = {
+          time: todayStr,
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+        };
+      }
+      candleSeries.update(lastCandle);
+    }
+
+    // 4. 포트폴리오 대시보드 로드 (5초 폴링)
+    async function loadDashboard() {
+      const tbody = document.getElementById('holdingsTableBody');
+      try {
+        const response = await fetch('/api/dashboard-data');
+        const res = await response.json();
+
+        if (res.status !== 'success') {
+          tbody.innerHTML = `<tr><td colspan="6" class="empty-msg" style="color: var(--up);">${res.message}</td></tr>`;
+          return;
+        }
+
+        const holdings = findHoldingsArray(res.holdings);
+        if (!holdings || holdings.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">보유 중인 주식이 없습니다.</td></tr>`;
+          return;
+        }
+
+        let totalBuySum = 0;
+        let totalValSum = 0;
+        let rowsHtml = '';
+
+        holdings.forEach(item => {
+          const name = item.name || item.stockName || item.symbol || item.ticker || '종목';
+          const currency = item.currency || 'USD';
+          const symbolCode = (item.symbol || item.ticker || name).toUpperCase();
+          
+          const qty = parseAmount(item.quantity || item.holdingQuantity || item.qty);
+          const buyPrice = parseAmount(item.averagePurchasePrice || item.averagePrice);
+          let currentPrice = parseAmount(item.lastPrice || item.currentPrice);
+          if (currentPrice === 0) currentPrice = buyPrice;
+
+          if (symbolCode === currentSymbol) {
+            updateLiveCandle(currentPrice);
+          }
+
+          const buyTotal = (item.cost && parseAmount(item.cost.amount)) || (qty * buyPrice);
+          const valTotal = (item.evaluationAmount && parseAmount(item.evaluationAmount.amount)) || (qty * currentPrice);
+          const profit = valTotal - buyTotal;
+          const returnRate = buyTotal > 0 ? (profit / buyTotal) * 100 : 0;
+
+          totalBuySum += buyTotal;
+          totalValSum += valTotal;
+
+          const signClass = profit > 0 ? 'up' : profit < 0 ? 'down' : '';
+
+          rowsHtml += `
+            <tr>
+              <td>
+                <strong style="cursor: pointer; color: #60a5fa; text-decoration: underline;" onclick="switchChart('${symbolCode}')">
+                  ${name}
+                </strong> 
+                <span style="font-size: 0.8rem; color: var(--subtext);">(${currency})</span>
+              </td>
+              <td>${qty.toLocaleString()} 주</td>
+              <td>${formatCurrency(buyPrice, currency)}</td>
+              <td>${formatCurrency(currentPrice, currency)}</td>
+              <td class="${signClass}">${profit > 0 ? '+' : ''}${formatCurrency(profit, currency)}</td>
+              <td class="${signClass}">${profit > 0 ? '+' : ''}${returnRate.toFixed(2)}%</td>
+            </tr>
+          `;
+        });
+
+        tbody.innerHTML = rowsHtml;
+
+        const totalProfit = totalValSum - totalBuySum;
+        const totalReturn = totalBuySum > 0 ? (totalProfit / totalBuySum) * 100 : 0;
+
+        document.getElementById('totalAsset').innerText = formatCurrency(totalValSum, 'USD');
+        document.getElementById('totalBuy').innerText = formatCurrency(totalBuySum, 'USD');
+
+        const profitEl = document.getElementById('totalProfit');
+        profitEl.innerText = `${totalProfit > 0 ? '+' : ''}${formatCurrency(totalProfit, 'USD')}`;
+        profitEl.className = `value ${totalProfit > 0 ? 'up' : totalProfit < 0 ? 'down' : ''}`;
+
+        const returnEl = document.getElementById('totalReturn');
+        returnEl.innerText = `${totalReturn > 0 ? '+' : ''}${totalReturn.toFixed(2)} %`;
+        returnEl.className = `value ${totalProfit > 0 ? 'up' : totalProfit < 0 ? 'down' : ''}`;
+
+      } catch (err) {
+        console.error("화면 렌더링 에러:", err);
+      }
+    }
+
+    function switchChart(symbol) {
+      loadCandles(symbol);
+    }
+
+    function changeChartSymbol() {
+      const input = document.getElementById('tickerInput');
+      if (input.value.trim()) {
+        loadCandles(input.value.trim());
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+      loadCandles('QLD');
+      loadDashboard();
+      
+      setInterval(loadDashboard, 5000);
+
+      document.getElementById('tickerInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') changeChartSymbol();
+      });
+    });
+  </script>
+</body>
+</html>
