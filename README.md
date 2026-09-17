@@ -1,7 +1,7 @@
-<img width="845" height="866" alt="image" src="https://github.com/user-attachments/assets/2b25c407-c43c-42e1-8799-a055c2265f80" />
 # 📈 주식 포트폴리오 & 일봉 차트 대시보드 (Stock Portfolio Dashboard)
 
 토스증권 OpenAPI와 Yahoo Finance를 연동하여 실시간 보유 자산 현황과 종목별 전체 일봉 차트를 시각화하는 웹 대시보드입니다.
+#<img width="826" height="842" alt="image" src="https://github.com/user-attachments/assets/e3c62ea3-0232-4cc8-968e-687f1bf01747" />
 
 ---
 
