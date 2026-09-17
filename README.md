@@ -22,30 +22,30 @@
 ## ⚙️ 실행 방법
 
 ### 1. 저장소 클론 및 이동
-\`\`\`bash
+```bash
 git clone https://github.com/chohyoungjun02/stock_portfolio.git
 cd stock_portfolio
-\`\`\`
+```
 
 ### 2. 가상환경 구성 및 패키지 설치
-\`\`\`bash
+```bash
 python -m venv .venv
 source .venv/Scripts/activate  # Windows PowerShell/Bash 기준
 pip install flask requests yfinance python-dotenv
-\`\`\`
+```
 
 ### 3. 환경 변수 설정 (`.env`)
 프로젝트 루트 디렉터리에 `.env` 파일을 생성하고 인증 키를 입력합니다.
-\`\`\`env
+```env
 TOSS_API_KEY=your_api_key_here
 TOSS_SECRET_KEY=your_secret_key_here
-\`\`\`
+```
 > **주의**: `.env` 파일은 보안상 GitHub에 업로드되지 않으므로 로컬에서 직접 생성해야 합니다.
 
 ### 4. 서버 구동
-\`\`\`bash
+```bash
 python app.py
-\`\`\`
+```
 브라우저에서 `http://127.0.0.1:5000`으로 접속합니다.
 
 ---
